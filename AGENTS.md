@@ -17,7 +17,10 @@ machine**, plus repo facts an agent needs. Human-facing setup guide:
 | Host `adb` | **not installed** — always use the container's adb: `docker exec android-test adb ...` |
 | Emulator image | `budtmo/docker-android:emulator_9.0` (API 28) |
 | Container | `android-test`, ports 6080 (noVNC) + 5555 (adb) |
-| First boot | **~9 min** (measured 540 s to `sys.boot_completed=1`) |
+| Remote access | Tailscale up: `100.86.207.15` / `chuonglvubuntu.tailf87e57.ts.net`. 6080 is bound 0.0.0.0 and `x11vnc` is `-nopw`, so `http://100.86.207.15:6080/vnc.html?autoconnect=true&resize=scale` works from any tailnet device (and from the LAN — add a tailnet ACL or `-p <tailscale-ip>:6080:6080` to narrow it). No `tailscale serve`; enable it for HTTPS + clipboard. Details: `doc/docker-android-test-setup.md`. |
+| First boot | ~9 min worst case; **60 s measured 2026-11-13** on a pre-pulled image |
+| Toolchain | JDK 21 (`/usr/lib/jvm/java-21-openjdk-amd64`), SDK `/data/Android/Sdk`, NDK `30.0.14904198`, CMake `3.22.1` |
+| Build command | `./gradlew :main:assembleUiOvpn23Release -PicsopenvpnDebugSign` (~3.5 min clean, 6 cores) |
 
 Quoting rule for the wrapper: the whole docker command goes in double quotes,
 inner strings in single quotes:
@@ -119,6 +122,9 @@ The system VPN consent dialog **can** be dismissed by coordinate tap (find
 | `am start -a VIEW` opens a chooser | app has two matching import activities | add `-n de.blinkt.openvpn/.activities.ConfigConverter` |
 | Import lands on a permission dialog | storage read not granted | `pm grant ... READ_EXTERNAL_STORAGE` (the app does not declare `WRITE_EXTERNAL_STORAGE`; that grant errors, harmless) |
 | `pm grant` fails with "has not requested permission" | permission not declared for that SDK | expected for `WRITE_EXTERNAL_STORAGE`; don't chase it |
+| Build fails: `Toolchain installation ... does not provide ... [JAVA_COMPILER]` | Java 21 installed as JRE-only | `sudo apt install openjdk-21-jdk-headless`; then `./gradlew --stop` (the daemon caches the failed probe) |
+| Build picks Java 11 although `java -version` shows 21 | login shell `JAVA_HOME` is stale (11) | put `org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64` in `~/.gradle/gradle.properties` |
+| `Failed to find package 'platforms;android-37'` | SDK 37 is published as `android-37.0` | `sdkmanager "platforms;android-37.0"` |
 | `FATAL EXCEPTION ... com.android.systemui ... TunerServiceImpl` | known SystemUI bug in this image's API 28 | ignore; assert on `mCurrentFocus` instead |
 | `adb: command not found` on host | platform-tools absent | use `docker exec android-test adb` |
 | Emulator sluggish / OOM | ~2 GB emulator on 7 GB host | close host memory hogs; avoid parallel heavy builds |

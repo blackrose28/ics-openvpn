@@ -11,12 +11,49 @@ and traps), see [`AGENTS.md`](../AGENTS.md).
 
 - Docker daemon accessible (user in `docker` group, no sudo needed)
 - `/dev/kvm` present and writable (user in `kvm` group) → hardware-accelerated emulator
-- APK already built: `main/build/outputs/apk/uiOvpn23/release/main-ui-ovpn23-release.apk`
+- JDK **21** (full JDK, not JRE): `sudo apt install openjdk-21-jdk-headless`.
+  A JRE-only install fails with `Toolchain installation ... does not provide the
+  required capabilities: [JAVA_COMPILER]`.
+- Android SDK at `/data/Android/Sdk` with `platforms;android-37.0`,
+  `build-tools;37.0.0`, `cmake;3.22.1`, `ndk;30.0.14904198`
+- APK built (see Step 0): `main/build/outputs/apk/uiOvpn23/release/main-ui-ovpn23-release.apk`
 
 ## Resource constraints
 
 - **Disk**: keep ~10 GB free before pulling; the image is ~3 GB compressed, more unpacked
 - **RAM**: emulator needs ~2 GB; close memory-heavy apps on the host while testing
+
+## Step 0 — Build the APK
+
+A fresh clone has no APK and uninitialized submodules. One-time setup:
+
+```bash
+# 1. native sources (openssl, openvpn2/3, mbedtls, fmt, lz4, asio)
+git submodule update --init --recursive
+
+# 2. SDK packages — needs cmdline-tools; API 37 is spelled "android-37.0"
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export ANDROID_HOME=/data/Android/Sdk
+yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+  "platforms;android-37.0" "build-tools;37.0.0" "cmake;3.22.1" "ndk;30.0.14904198"
+
+# 3. point Gradle at the SDK (local.properties is gitignored)
+printf 'sdk.dir=/data/Android/Sdk\n' > local.properties
+
+# 4. make Gradle use JDK 21 even though the login shell exports JAVA_HOME=11
+printf 'org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64\n' > ~/.gradle/gradle.properties
+```
+
+Then build. Release needs signing keys, so sign with the debug key for local
+testing (the `icsopenvpnDebugSign` property is supported by the build script):
+
+```bash
+./gradlew :main:assembleUiOvpn23Release -PicsopenvpnDebugSign
+```
+
+Output: `main/build/outputs/apk/uiOvpn23/release/main-ui-ovpn23-release.apk`
+(~39 MB universal APK with `x86_64`/`x86`/`arm64-v8a`/`armeabi-v7a` native
+libraries, so it runs on the emulator).
 
 ## Step 1 — Free disk space
 
@@ -59,6 +96,32 @@ docker run -d --name android-test \
   the `vnc_web` service exits immediately with
   `env WEB_VNC cannot be found, VNC_WEB is not started!` without them, so port 6080
   stays closed even though the emulator itself is fine.
+
+### NoVNC from another device (Tailscale)
+
+`-p 6080:6080` binds **all** host interfaces, so noVNC is already reachable on the
+host's Tailscale IP — no `tailscale serve`/Funnel required (verified 2026-11):
+
+```text
+http://100.86.207.15:6080/vnc.html?autoconnect=true&resize=scale
+http://chuonglvubuntu.tailf87e57.ts.net:6080/vnc.html?autoconnect=true&resize=scale
+```
+
+`vnc.html` ships without autoconnect, so pass `?autoconnect=true&resize=scale` or
+click **Connect**. ADB is published the same way: `adb connect 100.86.207.15:5555`.
+
+Caveats:
+
+- **No authentication.** `x11vnc` runs with `-nopw`, and the 0.0.0.0 bind means the
+  LAN IP (`http://<host-lan-ip>:6080`) can drive the emulator too. To restrict it
+  to the tailnet, recreate the container with `-p 100.86.207.15:6080:6080`
+  (recreate ≈ 9 min, so confirm first), or add a tailnet ACL for port 6080.
+- **Clipboard needs a secure context**: `navigator.clipboard` is unavailable over
+  plain `http://`. `tailscale serve` is currently *not enabled* on this tailnet;
+  enable Serve in the admin console, then
+  `sudo tailscale serve --bg --https=443 http://127.0.0.1:6080` →
+  `https://chuonglvubuntu.tailf87e57.ts.net/vnc.html`. That proxies host loopback,
+  so the container itself needs no change.
 
 ## Step 4 — Wait for boot & verify
 
