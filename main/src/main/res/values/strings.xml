@@ -36,6 +36,8 @@
     <string name="custom_option_warning">Enter custom OpenVPN options. Use with caution. Also note that many of the tun related OpenVPN settings cannot be supported by design of the VPNSettings. If you think an important option is missing contact the author</string>
     <string name="auth_username">Username (leave empty for no auth)</string>
     <string name="auth_pwquery">Password</string>
+    <string name="auth_otp_secret">OTP Secret</string>
+    <string name="auth_otp_secret_hint">(optional, base32 TOTP secret, 6 digit code is prepended to the password)</string>
     <string name="static_keys_info">For the static configuration the TLS Auth Keys will be used as static keys</string>
     <string name="configure_the_vpn">Configure the VPN</string>
     <string name="menu_add_profile">Add Profile</string>

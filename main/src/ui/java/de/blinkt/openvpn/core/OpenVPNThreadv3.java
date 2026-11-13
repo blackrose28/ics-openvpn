@@ -327,7 +327,7 @@ public class OpenVPNThreadv3 extends ClientAPI_OpenVPNClient implements Runnable
 
     @Override
     public void networkChange(boolean sameNetwork) {
-        mHandler.post(() -> { reconnect(1);});
+        mHandler.post(this::reconnectWithFreshCredentials);
     }
 
     @Override
@@ -447,9 +447,13 @@ public class OpenVPNThreadv3 extends ClientAPI_OpenVPNClient implements Runnable
 
     @Override
     public void reconnect() {
-        mHandler.post(() -> {
-            reconnect(1);
-        });
+        mHandler.post(this::reconnectWithFreshCredentials);
+    }
+
+    /* Refresh the credentials first so an OTP secret produces a current code */
+    private void reconnectWithFreshCredentials() {
+        setUserPW();
+        reconnect(1);
     }
 
     @Override

@@ -235,6 +235,21 @@
                 style="@style/item"
                 android:layout_marginLeft="8dip"
                 android:layout_marginRight="8dip"
+                android:text="@string/auth_otp_secret"
+                android:textAppearance="?android:attr/textAppearanceSmall" />
+
+            <EditText
+                android:id="@+id/auth_otp_secret"
+                style="@style/item"
+                android:layout_marginLeft="8dip"
+                android:layout_marginRight="8dip"
+                android:hint="@string/auth_otp_secret_hint"
+                android:inputType="textNoSuggestions" />
+
+            <TextView
+                style="@style/item"
+                android:layout_marginLeft="8dip"
+                android:layout_marginRight="8dip"
                 android:text="@string/auth_failed_behaviour"
                 android:textAppearance="?android:attr/textAppearanceSmall" />
 

@@ -127,6 +127,9 @@ public class VpnProfile implements Serializable, Cloneable {
     public String mRemoteCN = "";
     public String mPassword = "";
     public String mUsername = "";
+    // Base32 encoded TOTP secret. If set, a 6 digit one time password is
+    // prepended to the password on every authentication attempt
+    public String mOtpSecret = "";
     public boolean mRoutenopull = false;
     public boolean mUseRandomHostname = false;
     public boolean mUseFloat = false;
@@ -1227,11 +1230,20 @@ public class VpnProfile implements Serializable, Cloneable {
 
     public String getPasswordAuth() {
         String cachedPw = PasswordCache.getAuthPassword(mUuid, true);
-        if (cachedPw != null) {
-            return cachedPw;
-        } else {
-            return mPassword;
+        String password = cachedPw != null ? cachedPw : mPassword;
+
+        if (TextUtils.isEmpty(mOtpSecret))
+            return password;
+
+        String otp;
+        try {
+            otp = Totp.generate(mOtpSecret);
+        } catch (IllegalArgumentException e) {
+            VpnStatus.logError(String.format(Locale.US,
+                    "Cannot generate OTP for profile '%s': %s", getName(), e.getMessage()));
+            return password;
         }
+        return otp + (password == null ? "" : password);
     }
 
     // Used by the Array Adapter

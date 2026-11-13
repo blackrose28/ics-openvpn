@@ -34,6 +34,7 @@ public class Settings_Basic extends KeyChainSettingsFragment implements OnItemSe
     private TextView mPKCS12Password;
     private EditText mUserName;
     private EditText mPassword;
+    private EditText mOtpSecret;
     private View mView;
     private EditText mProfileName;
     private EditText mKeyPassword;
@@ -78,6 +79,7 @@ public class Settings_Basic extends KeyChainSettingsFragment implements OnItemSe
 
         mUserName = mView.findViewById(id.auth_username);
         mPassword = mView.findViewById(id.auth_password);
+        mOtpSecret = mView.findViewById(id.auth_otp_secret);
         mKeyPassword = mView.findViewById(id.key_password);
         mAuthRetry = mView.findViewById(id.auth_retry);
 
@@ -200,6 +202,7 @@ public class Settings_Basic extends KeyChainSettingsFragment implements OnItemSe
         mPKCS12Password.setText(mProfile.mPKCS12Password);
         mUserName.setText(mProfile.mUsername);
         mPassword.setText(mProfile.mPassword);
+        mOtpSecret.setText(mProfile.mOtpSecret);
         mKeyPassword.setText(mProfile.mKeyPassword);
         mAuthRetry.setSelection(mProfile.mAuthRetry);
         mEnablePeerFingerprint.setChecked(mProfile.mCheckPeerFingerprint);
@@ -222,6 +225,7 @@ public class Settings_Basic extends KeyChainSettingsFragment implements OnItemSe
 
         mProfile.mPassword = mPassword.getText().toString();
         mProfile.mUsername = mUserName.getText().toString();
+        mProfile.mOtpSecret = mOtpSecret.getText().toString().trim();
         mProfile.mKeyPassword = mKeyPassword.getText().toString();
         mProfile.mAuthRetry = mAuthRetry.getSelectedItemPosition();
         mProfile.mCheckPeerFingerprint = mEnablePeerFingerprint.isChecked();
