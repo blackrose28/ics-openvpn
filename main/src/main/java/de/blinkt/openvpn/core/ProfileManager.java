@@ -238,7 +238,7 @@ public class ProfileManager {
          * to reload the profile from storage */
 
         VpnProfile loadedProfile = get(c, uuid, version, 100);
-        if (loadedProfile != null & loadedProfile.mVersion >= version) {
+        if (loadedProfile != null && loadedProfile.mVersion >= version) {
             VpnStatus.notifyProfileVersionChanged(uuid, version, false);
         }
     }
@@ -261,6 +261,11 @@ public class ProfileManager {
         Editor editor = sharedprefs.edit();
         /* preference saving might be asynchronous*/
         final HashSet<String> vpn_list = new HashSet<>(profiles.keySet());
+        /* The UI and the :openvpn service process each keep their own cached copy of this
+         * preference (MODE_MULTI_PROCESS is ignored since API 24), so a write from a process
+         * with a stale copy would drop profiles added by the other one. Never remove an entry
+         * that still has a profile file on disk. */
+        vpn_list.addAll(profileUuidsOnDisk(context));
         editor.putStringSet("vpnlist", vpn_list);
 
         // For reasons I do not understand at all
@@ -282,12 +287,13 @@ public class ProfileManager {
      */
     public synchronized void refreshVPNList(Context context)
     {
+        Set<String> known = profileUuidsOnDisk(context);
         SharedPreferences listpref = Preferences.getSharedPreferencesMulti(PREFS_NAME, context);
         Set<String> vlist = listpref.getStringSet("vpnlist", null);
-        if (vlist == null)
-            return;
+        if (vlist != null)
+            known.addAll(vlist);
 
-        for (String vpnentry : vlist) {
+        for (String vpnentry : known) {
             if (!profiles.containsKey(vpnentry))
                 loadVpnEntry(context, vpnentry);
         }
@@ -295,7 +301,7 @@ public class ProfileManager {
         Vector<String> removeUuids = new Vector<>();
         for (String profileuuid:profiles.keySet())
         {
-            if (!vlist.contains(profileuuid))
+            if (!known.contains(profileuuid))
                 removeUuids.add(profileuuid);
         }
         for (String uuid: removeUuids)
@@ -304,45 +310,50 @@ public class ProfileManager {
         }
     }
 
+    /**
+     * Returns the UUIDs of the profiles that have a file in the app's private storage. The files
+     * are the authoritative list of profiles: unlike the "vpnlist" preference they cannot be
+     * lost to a stale SharedPreferences copy held by another process.
+     */
+    private Set<String> profileUuidsOnDisk(Context context) {
+        Set<String> uuids = new HashSet<>();
+        String[] extensions = new String[]{".cp", ".vp", ".cpold"};
+        for (String file : context.fileList()) {
+            for (String ext : extensions) {
+                if (file.endsWith(ext)) {
+                    uuids.add(file.substring(0, file.length() - ext.length()));
+                    break;
+                }
+            }
+        }
+        return uuids;
+    }
+
     private synchronized void loadVPNList(Context context) {
         profiles = new HashMap<>();
         SharedPreferences listpref = Preferences.getSharedPreferencesMulti(PREFS_NAME, context);
         Set<String> vlist = listpref.getStringSet("vpnlist", null);
-        if (vlist == null) {
+        if (vlist == null)
             vlist = new HashSet<>();
-        }
-        // Always try to load the temporary profile
-        vlist.add(TEMPORARY_PROFILE_FILENAME);
+        else
+            /* getStringSet() hands out the instance owned by SharedPreferences, copy it so the
+             * cached preference is not modified by accident */
+            vlist = new HashSet<>(vlist);
 
-        for (String vpnentry : vlist) {
+        Set<String> entries = new HashSet<>(vlist);
+        /* Always reconcile with the files on disk: the "vpnlist" preference cannot be trusted on
+         * its own, because both processes cache it separately and the recovery of a missing entry
+         * used to run only once per install. That left imported profiles invisible to the service
+         * process (and to the next app start). */
+        entries.addAll(profileUuidsOnDisk(context));
+        entries.add(TEMPORARY_PROFILE_FILENAME);
+
+        for (String vpnentry : entries) {
             loadVpnEntry(context, vpnentry);
         }
 
-        if (!listpref.getBoolean("didrecover", false))
-        {
-            recoverProfiles(context);
-            Editor listprefedit = listpref.edit();
-            listprefedit.putBoolean("didrecover", true);
-            listprefedit.apply();
-        }
-    }
-
-    private void recoverProfiles(Context context) {
-        /* Recover profiles that were removed from the list by the 0.7.66 update that removed all of them because
-         * of a broken optimisation */
-        for (String file: context.fileList())
-        {
-            if (file.endsWith(".cp") || file.endsWith(".vp"))
-            {
-                String profileName = file.split("\\.")[0];
-
-                if (!profiles.containsKey(profileName)) {
-                    loadVpnEntry(context, profileName);
-                }
-            }
-
-        }
-
+        if (!entries.equals(vlist))
+            saveProfileList(context);
     }
 
     private synchronized void loadVpnEntry(Context context, String vpnentry) {
@@ -389,13 +400,15 @@ public class ProfileManager {
     public synchronized void removeProfile(Context context, VpnProfile profile) {
         String vpnentry = profile.getUUID().toString();
         profiles.remove(vpnentry);
-        saveProfileList(context);
-
 
         // delete both unencrypted and encrypted variants
         String[] extensions = new String[]{".vp", ".cp", ".cpold"};
         for (String ext: extensions)
             context.deleteFile(vpnentry + ext);
+
+        /* After the files are gone, otherwise saveProfileList() keeps the UUID because entries
+         * with a file on disk are never removed from the list */
+        saveProfileList(context);
 
         if (mLastConnectedVpn == profile)
             mLastConnectedVpn = null;
