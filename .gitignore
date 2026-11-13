@@ -31,3 +31,8 @@ idir
 
 test.local.conf
 .kotlin
+
+# Local secrets (e.g. emulator test credentials), never commit
+.env
+.env.*
+!.env.example
