@@ -155,3 +155,16 @@ command forever.
 
 Stop the emulator only when finished testing; otherwise leave it running for the
 next session.
+
+## Code intelligence (Ripwire)
+
+Use [Ripwire](https://github.com/redhat-et/ripwire) from the repository root before broad code searches or whole-file reads. It is a dev tool, not a runtime dependency; it keeps its incremental cache outside the repo.
+
+- Install (Linux/macOS): download `scripts/install.sh` from the Ripwire repo, review it, then `RIPWIRE_REPO=redhat-et/ripwire bash install.sh`; ensure `~/.local/bin` is on `PATH`; verify with `ripwire --version`.
+- Orient: `ripwire . --for="<task>" --legend=compact`.
+- Inspect: `ripwire . --expand="<symbol>" --legend=compact`.
+- Before editing an existing symbol: `--impact="<symbol>"` and `--uses="<symbol>"`; report callers, affected paths and risk, and warn before high-risk edits.
+- Select tests: `--affected="<symbol>"`.
+- Before committing: inspect `git diff` and run `ripwire . --quality-delta --legend=compact`.
+
+Static analysis is approximate; verify dynamic dispatch and cross-language boundaries (AIDL, JNI, reflection) in source and tests.
